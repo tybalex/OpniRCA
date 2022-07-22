@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from main_rca import main_rca
 
 app = FastAPI()
 
@@ -10,9 +11,5 @@ async def root():
 
 @app.get("/get_root_cause")
 async def get_root_cause():
-    import subprocess
-
-    command = "cd ..; bash main.sh"
-
-    ret = subprocess.run(command, capture_output=True, shell=True)
-    return {"message":"results generated", "info": ret}
+    main_rca()
+    return {"message":"results generated"}

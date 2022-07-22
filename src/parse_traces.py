@@ -24,6 +24,16 @@ es = Elasticsearch(
 )
 
 
+def load_parsed_history_data():
+    with open("history.pkl", 'rb') as fin:
+        df = pickle.load(fin)
+    return df
+
+def load_parsed_realtime_data():
+    with open("realtime.pkl", 'rb') as fin:
+        df = pickle.load(fin)
+    return df
+
 def datetime_to_timestamp(date):
     st = 0
     if date.endswith("Z"):
@@ -261,6 +271,7 @@ def parse_results(l):
         pickle.dump(df, f)
     print(microserviser_pairs)
     print(svcs)
+    return df
         
 
 
