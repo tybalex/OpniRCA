@@ -23,7 +23,7 @@ es = Elasticsearch(
 )
 
 
-def service_list():   
+def list_latest_service():   
     query = {
       "query": {
         "bool": {
@@ -31,7 +31,7 @@ def service_list():
             {
               "range": {
               "endTime": {
-              "gte": "now-5m"
+              "gte": "now-10m"
                 }
               }
             }
@@ -73,7 +73,7 @@ def service_list():
 
 def main_trainer():
     while True:
-        if "history.pkl" in os.list_dir("./"):
+        if "history.pkl" in os.listdir("./"):
             logger.info("normal interval model is ready.")
         else:
             query = {
@@ -95,22 +95,25 @@ def main_trainer():
             res = es.count(index='otel-v1-apm-span', body=query)["count"]
             logger.info(f"available data in last 2 hours : {res}")
             if res > 300000:
+                logger.info("======prepare model data==========")
                 pt.get_parsed_history_data()
 
         service_list = []
-        if "service_list.txt" in os.list_dir("./"):
-            logger.info("service_list is ready.")
-            with open("service_list.txt") as fin:
+        if "service_list.txt" in os.listdir("./"):
+            logger.info("=======service_list is ready=========")
+            with open("service_list.txt", 'r') as fin:
                 for line in fin:
                     service_list.append(line.strip())
-        new_list = service_list()
+        new_list = list_latest_service()
         logger.info(new_list)
-        if len(new_list) != service_list: # if they are different
-            logger.info("new service list!")
+        if len(new_list) != len(service_list): # if they are different
+            logger.info(f"===========new service list========== \n {new_list}")
             service_list = new_list
-            with open("service_list.txt") as fout:
+            with open("service_list.txt", 'w') as fout:
                 for line in service_list:
                     fout.write(line + "\n")
+        else:
+            logger.info("=====service list remains the same=====")
         time.sleep(300)
 
 
