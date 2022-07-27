@@ -387,7 +387,7 @@ class TraceRCA:
                     f"|{in_out_diff(item, item_ret[item]['pattern'], return_='in'):8.0f}"
                     f"|{in_out_diff(item, item_ret[item]['pattern'], return_='out'):8.0f}"
                 )
-        return ret
+        return [(i, item_ret[i]["score"]) for i in ret]
 
 
 

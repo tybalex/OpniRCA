@@ -18,10 +18,14 @@ def main_rca():
     # parse data and preprocess
     start_time = time.time()
     s1 = start_time
-    realtime_parse = pt.load_parsed_realtime_data()
+    
 
     history_parse = pt.load_parsed_history_data()
- 
+    if history_parse is None:
+        return "model is NOT ready."
+
+    realtime_parse = pt.load_parsed_realtime_data()
+
     logger.info(f"parse time taken : {time.time() - start_time }" )
     start_time = time.time()
     # reorganize

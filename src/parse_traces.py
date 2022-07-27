@@ -25,14 +25,26 @@ es = Elasticsearch(
 
 
 def load_parsed_history_data():
-    with open("history.pkl", 'rb') as fin:
-        df = pickle.load(fin)
-    return df
+    try:
+        with open("history.pkl", 'rb') as fin:
+            df = pickle.load(fin)
+        return df
+    except:
+        return None
 
 def load_parsed_realtime_data():
     with open("realtime.pkl", 'rb') as fin:
         df = pickle.load(fin)
     return df
+
+
+def get_parsed_history_data():
+    res = get_from_os("2h")
+    return parse_results(res, "history.pkl")
+
+def get_parsed_realtime_data():
+    res = get_from_os("5m")
+    return parse_results(res, "realtime.pkl")
 
 def datetime_to_timestamp(date):
     st = 0
@@ -60,7 +72,10 @@ def parse_traces():
     parse_results(res)
 
 
-def get_from_os():   
+def get_from_os(time_interval : str):  
+    """
+    time_interval: 5m, 1h, etc...
+    """  
     query = {
       "query": {
         "bool": {
@@ -68,7 +83,7 @@ def get_from_os():
             {
               "range": {
               "endTime": {
-              "gte": "now-5m"
+              "gte": "now-" + time_interval
                 }
               }
             }
@@ -99,12 +114,12 @@ def get_from_os():
           print("scroll size: " + str(scroll_size))
           l.extend(page['hits']['hits'])
           total_size -= scroll_size
-    print(f"fetched size: {len(l)}")
+    print(f"fetched size: {len(l)} in the last {time_interval}")
     return l
 
 
 
-def parse_results(l):
+def parse_results(l, output_filename: str):
     http_status_set = set()
     pair_service_set = set()
     traces_dict = defaultdict() 
@@ -266,7 +281,7 @@ def parse_results(l):
     df = res
 
     print(f"valid record : {len(df)}")
-    with open(output_file:="realtime.pkl", 'wb') as f:
+    with open(output_file:=output_filename, 'wb') as f:
         logger.info(f"output file : {output_file}")
         pickle.dump(df, f)
     print(microserviser_pairs)

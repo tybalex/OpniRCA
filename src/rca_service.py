@@ -11,5 +11,5 @@ async def root():
 
 @app.get("/get_root_cause")
 async def get_root_cause():
-    main_rca()
-    return {"message":"results generated"}
+    res = main_rca()
+    return {"message":"results generated", "result": res}
