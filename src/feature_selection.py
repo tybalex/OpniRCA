@@ -3,11 +3,9 @@ from collections import defaultdict
 from itertools import product
 from pathlib import Path
 
-import click
 import numpy as np
 import seaborn as sns
 import logging
-from tqdm import tqdm
 from pprint import pprint
 from rca_config import FEATURE_NAMES
 import pandas as pd
@@ -57,7 +55,7 @@ def selecting_feature_main(input_data: pd.DataFrame, history_data: pd.DataFrame,
     if DEBUG:
         plot_dir = output_file.parent / 'selecting_feature.debug'
         plot_dir.mkdir(exist_ok=True)
-    for (source, target), feature in tqdm(product(indices, FEATURE_NAMES)):
+    for (source, target), feature in product(indices, FEATURE_NAMES):
         empirical = np.sort(df.loc[(source, target), feature].values)
         reference = np.sort(history.loc[(source, target), feature].values)
         # p_value = ks_2samp(

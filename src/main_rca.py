@@ -24,7 +24,8 @@ def main_rca():
     if history_parse is None:
         return "model is NOT ready."
 
-    realtime_parse = pt.load_parsed_realtime_data()
+    # realtime_parse = pt.load_parsed_realtime_data()
+    realtime_parse = pt.get_parsed_realtime_data()
 
     logger.info(f"parse time taken : {time.time() - start_time }" )
     start_time = time.time()

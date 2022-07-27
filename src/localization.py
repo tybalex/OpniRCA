@@ -7,7 +7,6 @@ from functools import lru_cache, reduce
 from pathlib import Path
 from typing import List, FrozenSet
 
-import click
 import numpy as np
 import pandas as pd
 import logging

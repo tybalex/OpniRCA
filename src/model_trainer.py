@@ -8,6 +8,8 @@ import pandas as pd
 import logging
 import os
 import parse_traces as pt
+from trace_encoding import span_encoding, trace_encoding
+from anomaly_detection import train_history_model
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__file__)
@@ -96,12 +98,15 @@ def main_trainer():
             logger.info(f"available data in last 2 hours : {res}")
             if res > 300000:
                 logger.info("======prepare model data==========")
-                pt.get_parsed_history_data()
+                history_parse = pt.get_parsed_history_data()
+                history_trace_dict = trace_encoding(history_parse)
+                history_span_df = span_encoding(history_parse, True)
+                history_normal_model = train_history_model(history_trace_dict, history_span_df)
 
         service_list = []
-        if "service_list.txt" in os.listdir("./"):
+        if "service_list.conf" in os.listdir("./"):
             logger.info("=======service_list is ready=========")
-            with open("service_list.txt", 'r') as fin:
+            with open("service_list.conf", 'r') as fin:
                 for line in fin:
                     service_list.append(line.strip())
         new_list = list_latest_service()
@@ -109,7 +114,7 @@ def main_trainer():
         if len(new_list) != len(service_list): # if they are different
             logger.info(f"===========new service list========== \n {new_list}")
             service_list = new_list
-            with open("service_list.txt", 'w') as fout:
+            with open("service_list.conf", 'w') as fout:
                 for line in service_list:
                     fout.write(line + "\n")
         else:

@@ -2,7 +2,6 @@ import sys
 from typing import Dict, Tuple,List
 import numpy as np
 
-import click
 import pickle
 import pandas as pd
 from pathlib import Path

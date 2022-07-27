@@ -1,6 +1,5 @@
 import pickle
 
-import click
 import numpy as np
 import logging
 from sklearn.ensemble import RandomForestClassifier, IsolationForest
@@ -13,7 +12,6 @@ import pickle
 import time
 from pathlib import Path
 
-import click
 import numpy as np
 from sklearn.ensemble import IsolationForest
 import logging

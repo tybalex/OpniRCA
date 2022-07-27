@@ -33,6 +33,9 @@ def load_parsed_history_data():
         return None
 
 def load_parsed_realtime_data():
+    '''
+    only testing
+    '''
     with open("realtime.pkl", 'rb') as fin:
         df = pickle.load(fin)
     return df
