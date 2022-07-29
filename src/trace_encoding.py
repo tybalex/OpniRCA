@@ -8,6 +8,7 @@ from pathlib import Path
 import logging
 
 from rca_config import *
+from utils import read_pkl_file, write_pkl_file
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__file__)
@@ -52,12 +53,11 @@ def span_encoding(input_data, is_history=False) -> pd.DataFrame:
     # with open(str(input_file.resolve()), 'rb') as f:
     #     input_data = pickle.load(f)
     if is_history:
-        try:
-            with open("encoded_history_span.pkl", 'rb') as fin:
-                df = pickle.load(fin)
+        encoded_history_span = read_pkl_file("encoded_history_span.pkl")
+        if encoded_history_span is not None:
             logger.info("using encoded span history data.")
-            return df
-        except:
+            return encoded_history_span
+        else:
             logger.info("encoded history span doesn't exist, will generate one.")
 
     if ENABLE_ALL_FEATURES:
@@ -127,8 +127,7 @@ def span_encoding(input_data, is_history=False) -> pd.DataFrame:
         assert service in INVOLVED_SERVICES, f'{service} {df[df.source == service]}'
 
     if is_history:
-        with open("encoded_history_span.pkl", 'wb') as fout:
-            pickle.dump(df, fout)
+        write_pkl_file("encoded_history_span.pkl", df)
     return df
     # with open(output_file, 'wb+') as f:
     #     logger.info(f"output file : {output_file}")
@@ -188,26 +187,24 @@ def encoding_data(source_data: List, drop_service=(), drop_fault_type=()):
 
 
 def trace_encoding(input_data: pd.DataFrame, drop_service=0, drop_fault_type=0):
-    try:
-        with open("encoded_history_trace.pkl", 'rb') as fin:
-            result = pickle.load(fin)
+    exist_history_data = read_pkl_file("encoded_history_trace.pkl")
+    if exist_history_data is not None:
         logger.info("using encoded trace history data.")
-        return result
-    except:
+        return exist_history_data
+    else:
         logger.info("encoded history trace doesn't exist, will generate one.")
-    drop_service = list(INVOLVED_SERVICES)[:drop_service]
-    drop_fault_type = list(FAULT_TYPES)[:drop_fault_type]
-    data, labels, masks, trace_ids, root_causes = encoding_data(input_data, drop_service, drop_fault_type)
-    # np.savez(
-    #     output_file,
-    #     data=data.reshape((len(data), -1)),
-    #     labels=labels,
-    #     masks=masks.reshape((len(data), -1)),
-    #     trace_ids=trace_ids,
-    #     root_causes=root_causes,
-    # )
-    res = {"data" : data.reshape((len(data), -1)), "labels" : labels,"masks" : masks.reshape((len(data), -1)) , "trace_ids" : trace_ids, "root_causes" : root_causes}
-    with open("encoded_history_trace.pkl", 'wb') as fout:
-        pickle.dump(res, fout)
-    return res
+        drop_service = list(INVOLVED_SERVICES)[:drop_service]
+        drop_fault_type = list(FAULT_TYPES)[:drop_fault_type]
+        data, labels, masks, trace_ids, root_causes = encoding_data(input_data, drop_service, drop_fault_type)
+        # np.savez(
+        #     output_file,
+        #     data=data.reshape((len(data), -1)),
+        #     labels=labels,
+        #     masks=masks.reshape((len(data), -1)),
+        #     trace_ids=trace_ids,
+        #     root_causes=root_causes,
+        # )
+        res = {"data" : data.reshape((len(data), -1)), "labels" : labels,"masks" : masks.reshape((len(data), -1)) , "trace_ids" : trace_ids, "root_causes" : root_causes}
+        write_pkl_file("encoded_history_trace.pkl", res)
+        return res
 

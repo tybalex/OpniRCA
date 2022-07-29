@@ -1,0 +1,58 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rca-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---      
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yb-rca
+  labels:
+    app: yb-rca
+  namespace: opni-cluster-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yb-rca
+  template:
+    metadata:
+      labels:
+        app: yb-rca
+    spec:
+      volumes:
+        - name: rca-pvc-mount
+          persistentVolumeClaim:
+            claimName: rca-pvc
+      containers:
+      - name: yb-rca
+        env:
+        - name: DATA_DIR
+          value: "/data"
+        - name: OPENSEARCH_URL
+          value: https://opni-os-svc.opni-cluster-system.svc:9200
+        volumeMounts:
+          - mountPath: /data
+            name: rca-pvc-mount
+        image: docker.io/tybalex/opni-rca:dev1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5050
+      - name: yb-rca-trainer
+        env:
+        - name: DATA_DIR
+          value: "/data"
+        - name: OPENSEARCH_URL
+          value: https://opni-os-svc.opni-cluster-system.svc:9200
+        volumeMounts:
+          - mountPath: /data
+            name: rca-pvc-mount
+        image: docker.io/tybalex/opni-rca_trainer:dev3
+        imagePullPolicy: Always

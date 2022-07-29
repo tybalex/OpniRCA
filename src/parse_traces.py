@@ -9,36 +9,23 @@ from datetime import datetime
 import pickle
 import pandas as pd
 import logging
+import os
+from utils import read_pkl_file, write_pkl_file, es
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__file__)
 logger.setLevel("DEBUG")
 
-es = Elasticsearch(
-    ["https://demo.tybalex.us:9200"],
-    port=9200,
-    http_compress=True,
-    http_auth=("admin", "admin"),
-    verify_certs=False,
-    use_ssl=False,
-)
 
 
 def load_parsed_history_data():
-    try:
-        with open("history.pkl", 'rb') as fin:
-            df = pickle.load(fin)
-        return df
-    except:
-        return None
+    return read_pkl_file("history.pkl")
 
 def load_parsed_realtime_data():
     '''
     only testing
     '''
-    with open("realtime.pkl", 'rb') as fin:
-        df = pickle.load(fin)
-    return df
+    return read_pkl_file("realtime.pkl")
 
 
 def get_parsed_history_data():
@@ -79,6 +66,7 @@ def get_from_os(time_interval : str):
     """
     time_interval: 5m, 1h, etc...
     """  
+    start_time = time.time()
     query = {
       "query": {
         "bool": {
@@ -103,7 +91,6 @@ def get_from_os(time_interval : str):
     # return l
 
     sid = res['_scroll_id']
-    print(sid)
     # scroll_size = page['hits']['total']
       
     # # Start scrolling
@@ -117,7 +104,7 @@ def get_from_os(time_interval : str):
           print("scroll size: " + str(scroll_size))
           l.extend(page['hits']['hits'])
           total_size -= scroll_size
-    print(f"fetched size: {len(l)} in the last {time_interval}")
+    logger.info(f"query os toakes : {time.time() - start_time}")
     return l
 
 
@@ -284,11 +271,7 @@ def parse_results(l, output_filename: str):
     df = res
 
     print(f"valid record : {len(df)}")
-    with open(output_file:=output_filename, 'wb') as f:
-        logger.info(f"output file : {output_file}")
-        pickle.dump(df, f)
-    print(microserviser_pairs)
-    print(svcs)
+    write_pkl_file(output_filename, df)
     return df
         
 

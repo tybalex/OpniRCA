@@ -17,6 +17,7 @@ from sklearn.ensemble import IsolationForest
 import logging
 from rca_config import FEATURE_NAMES
 from diskcache import Cache
+from utils import read_pkl_file, write_pkl_file
 
 DEBUG = True
 
@@ -30,12 +31,11 @@ def _extract_data(x):
 
 
 def train_history_model(trace_history_data, invo_history_data):
-    try:
-        with open("history_model.pkl", 'rb') as fin:
-            result = pickle.load(fin)
+    history_model = read_pkl_file("history_model.pkl")
+    if history_model is not None:
         logger.info("using trained model.")
-        return result
-    except:
+        return history_model
+    else:
         logger.info("normal model doesn't exist, will train one.")
 
     his_data, his_labels, his_masks, his_trace_ids = _extract_data(trace_history_data)
@@ -74,8 +74,7 @@ def train_history_model(trace_history_data, invo_history_data):
                 'std': np.maximum(np.std(reference[:]), 0.1)
             }
 
-    with open("history_model.pkl", 'wb') as fout:
-        pickle.dump(result, fout)
+    write_pkl_file("history_model.pkl", result)
     return result
 
 

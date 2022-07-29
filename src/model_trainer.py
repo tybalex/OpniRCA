@@ -10,19 +10,11 @@ import os
 import parse_traces as pt
 from trace_encoding import span_encoding, trace_encoding
 from anomaly_detection import train_history_model
+from utils import DATA_DIR, es
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__file__)
 logger.setLevel("DEBUG")
-
-es = Elasticsearch(
-    ["https://demo.tybalex.us:9200"],
-    port=9200,
-    http_compress=True,
-    http_auth=("admin", "admin"),
-    verify_certs=False,
-    use_ssl=False,
-)
 
 
 def list_latest_service():   
@@ -75,7 +67,7 @@ def list_latest_service():
 
 def main_trainer():
     while True:
-        if "history.pkl" in os.listdir("./"):
+        if "history.pkl" in os.listdir(DATA_DIR):
             logger.info("normal interval model is ready.")
         else:
             query = {
@@ -104,9 +96,9 @@ def main_trainer():
                 history_normal_model = train_history_model(history_trace_dict, history_span_df)
 
         service_list = []
-        if "service_list.conf" in os.listdir("./"):
+        if "service_list.conf" in os.listdir(DATA_DIR):
             logger.info("=======service_list is ready=========")
-            with open("service_list.conf", 'r') as fin:
+            with open(DATA_DIR + "/service_list.conf", 'r') as fin:
                 for line in fin:
                     service_list.append(line.strip())
         new_list = list_latest_service()
@@ -114,7 +106,7 @@ def main_trainer():
         if len(new_list) != len(service_list): # if they are different
             logger.info(f"===========new service list========== \n {new_list}")
             service_list = new_list
-            with open("service_list.conf", 'w') as fout:
+            with open(DATA_DIR +"/service_list.conf", 'w') as fout:
                 for line in service_list:
                     fout.write(line + "\n")
         else:
