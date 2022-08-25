@@ -9,14 +9,14 @@ spec:
   resources:
     requests:
       storage: 1Gi
----      
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: yb-rca
   labels:
     app: yb-rca
-  namespace: opni-cluster-system
+  namespace: opni-system
 spec:
   replicas: 1
   selector:
@@ -37,11 +37,11 @@ spec:
         - name: DATA_DIR
           value: "/data"
         - name: OPENSEARCH_URL
-          value: https://opni-os-svc.opni-cluster-system.svc:9200
+          value: https://opni-os-svc.opni-system.svc:9200
         volumeMounts:
           - mountPath: /data
             name: rca-pvc-mount
-        image: docker.io/tybalex/opni-rca:dev1
+        image: docker.io/tybalex/opni-rca:mc
         imagePullPolicy: Always
         ports:
         - containerPort: 5050
@@ -50,9 +50,37 @@ spec:
         - name: DATA_DIR
           value: "/data"
         - name: OPENSEARCH_URL
-          value: https://opni-os-svc.opni-cluster-system.svc:9200
+          value: https://opni-os-svc.opni-system.svc:9200
         volumeMounts:
           - mountPath: /data
             name: rca-pvc-mount
-        image: docker.io/tybalex/opni-rca_trainer:dev3
+        image: docker.io/tybalex/opni-rca_trainer:mc
         imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yb-rca-service
+  namespace: opni-system
+spec:
+  ports:
+  - name: http
+    port: 5050
+    targetPort: 5050
+  selector:
+    app: yb-rca
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yb-rca-service-external
+  namespace: opni-system
+spec:
+  ports:
+  - name: http
+    port: 5050
+    targetPort: 5050
+  selector:
+    app: yb-rca
+  type: LoadBalancer

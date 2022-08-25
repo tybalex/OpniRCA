@@ -1,40 +1,37 @@
-
-
-
-from dataclasses import dataclass
-from elasticsearch import Elasticsearch
-from collections import defaultdict
-import time
-from datetime import datetime
-import pickle
-import pandas as pd
+# Standard Library
 import logging
-import os
-from utils import read_pkl_file, write_pkl_file, es
+import time
+from collections import defaultdict
+from datetime import datetime
+
+# Local
+from utils import es, read_pkl_file, write_pkl_file
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__file__)
 logger.setLevel("DEBUG")
 
 
+def load_parsed_history_data(cluster_id):
+    return read_pkl_file(cluster_id + "history.pkl")
 
-def load_parsed_history_data():
-    return read_pkl_file("history.pkl")
 
-def load_parsed_realtime_data():
-    '''
+def load_parsed_realtime_data(cluster_id):
+    """
     only testing
-    '''
-    return read_pkl_file("realtime.pkl")
+    """
+    return read_pkl_file(cluster_id + "realtime.pkl")
 
 
-def get_parsed_history_data():
-    res = get_from_os("2h")
-    return parse_results(res, "history.pkl")
+def get_parsed_history_data(cluster_id):
+    res = get_from_os("2h", cluster_id)
+    return parse_results(res, cluster_id + "history.pkl", cluster_id)
 
-def get_parsed_realtime_data():
-    res = get_from_os("5m")
-    return parse_results(res, "realtime.pkl")
+
+def get_parsed_realtime_data(cluster_id):
+    res = get_from_os("5m", cluster_id)
+    return parse_results(res, cluster_id + "realtime.pkl", cluster_id)
+
 
 def datetime_to_timestamp(date):
     st = 0
@@ -42,7 +39,7 @@ def datetime_to_timestamp(date):
         if "." not in date:
             print(date)
             date = date[:-1] + ".000000"
-        elif len(second_part:=date.split(".")[1]) == 10:
+        elif len(second_part := date.split(".")[1]) == 10:
             date = date[:-4]
             st = 1
         elif len(second_part) == 7:
@@ -57,64 +54,55 @@ def datetime_to_timestamp(date):
     return datetime.timestamp(d) * 1000000
 
 
-def parse_traces():
-    res = get_from_os()
-    parse_results(res)
-
-
-def get_from_os(time_interval : str):  
+def get_from_os(time_interval: str, cluster_id: str):
     """
     time_interval: 5m, 1h, etc...
-    """  
+    """
     start_time = time.time()
     query = {
-      "query": {
-        "bool": {
-          "must": [
-            {
-              "range": {
-              "endTime": {
-              "gte": "now-" + time_interval
-                }
-              }
+        "query": {
+            "bool": {
+                "must": [
+                    {
+                        "match": {
+                            "cluster_id": cluster_id  # it's not exact match, but no id can contain another so it is fine.
+                        }
+                    },
+                    {"range": {"endTime": {"gte": "now-" + time_interval}}},
+                ]
             }
-
-          ]
         }
-      }
     }
-    res = es.search( index="otel-v1-apm-span", body=query, scroll = '1m', size=10000)
+    res = es.search(index="otel-v1-apm-span", body=query, scroll="1m", size=10000)
     l = res["hits"]["hits"]
-    total_size = res['hits']['total']["value"]
+    total_size = res["hits"]["total"]["value"]
     print(f"total size : {total_size}")
     total_size -= 10000
     # return l
 
-    sid = res['_scroll_id']
+    sid = res["_scroll_id"]
     # scroll_size = page['hits']['total']
-      
+
     # # Start scrolling
-    while (total_size > 0):
-          print("Scrolling...")
-          page = es.scroll(scroll_id = sid, scroll = '1m')
-          # Update the scroll ID
-          sid = page['_scroll_id']
-          # Get the number of results that we returned in the last scroll
-          scroll_size = len(page['hits']['hits'])
-          print("scroll size: " + str(scroll_size))
-          l.extend(page['hits']['hits'])
-          total_size -= scroll_size
+    while total_size > 0:
+        print("Scrolling...")
+        page = es.scroll(scroll_id=sid, scroll="1m")
+        # Update the scroll ID
+        sid = page["_scroll_id"]
+        # Get the number of results that we returned in the last scroll
+        scroll_size = len(page["hits"]["hits"])
+        print("scroll size: " + str(scroll_size))
+        l.extend(page["hits"]["hits"])
+        total_size -= scroll_size
     logger.info(f"query os toakes : {time.time() - start_time}")
     return l
 
 
-
-def parse_results(l, output_filename: str):
+def parse_results(l, output_filename: str, cluster_id: str):
     http_status_set = set()
     pair_service_set = set()
-    traces_dict = defaultdict() 
+    traces_dict = defaultdict()
     span_dict = defaultdict(dict)
-
 
     for _x in l:
         x = _x["_source"]
@@ -122,22 +110,31 @@ def parse_results(l, output_filename: str):
         kind = x["kind"]
         parent_spanid = x["parentSpanId"]
         this_spanid = x["spanId"]
-        latency = datetime_to_timestamp(x["endTime"]) - datetime_to_timestamp(x["startTime"])
-        if parent_spanid == "": ## top level span
-            if kind == "SPAN_KIND_SERVER":
-                
+        latency = datetime_to_timestamp(x["endTime"]) - datetime_to_timestamp(
+            x["startTime"]
+        )
+        if parent_spanid == "":  ## top level span
+            if kind == "SPAN_KIND_SERVER":  ## usually http call from outside
                 traces_dict[traceid] = {
-                "trace_start_timestamp" : datetime_to_timestamp(x["startTime"]),
-                "trace_end_timestamp" : datetime_to_timestamp(x["traceGroupFields.endTime"]),
-                "http_status" : int(x["span.attributes.http@status_code"]) #// 100
+                    "trace_start_timestamp": datetime_to_timestamp(x["startTime"]),
+                    "trace_end_timestamp": datetime_to_timestamp(
+                        x["traceGroupFields"]["endTime"]
+                    ),
+                    "http_status": int(x["span.attributes.http@status_code"]),  # // 100
                 }
                 http_status_set.add(int(x["span.attributes.http@status_code"]))
-            elif kind == "SPAN_KIND_CLIENT": 
-                custom_http = 210 if int(x["traceGroupFields.statusCode"]) == 0 else 510
+            elif (
+                kind == "SPAN_KIND_CLIENT"
+            ):  ## typically internal API call from something like main frontend/backend
+                custom_http = (
+                    210 if int(x["traceGroupFields"]["statusCode"]) == 0 else 510
+                )
                 traces_dict[traceid] = {
-                "trace_start_timestamp" : datetime_to_timestamp(x["startTime"]),
-                "trace_end_timestamp" : datetime_to_timestamp(x["traceGroupFields.endTime"]),
-                "http_status" : custom_http
+                    "trace_start_timestamp": datetime_to_timestamp(x["startTime"]),
+                    "trace_end_timestamp": datetime_to_timestamp(
+                        x["traceGroupFields"]["endTime"]
+                    ),
+                    "http_status": custom_http,
                 }
             # span_dict[this_spanid] = {
             #         "trace_id" :traceid,
@@ -150,32 +147,38 @@ def parse_results(l, output_filename: str):
         else:
             if kind == "SPAN_KIND_CLIENT":
                 span_dict[this_spanid] = {
-                    "trace_id" :traceid,
-                    "span_id" : this_spanid,
-                    "start_timestamp" : datetime_to_timestamp(x["startTime"]),
-                    "end_timestamp" : datetime_to_timestamp(x["endTime"]),
-                    "latency" : latency, #x["durationInNanos"],
-                    }
+                    "trace_id": traceid,
+                    "span_id": this_spanid,
+                    "start_timestamp": datetime_to_timestamp(x["startTime"]),
+                    "end_timestamp": datetime_to_timestamp(x["endTime"]),
+                    "latency": latency,  # x["durationInNanos"],
+                }
     for _x in l:
         x = _x["_source"]
         traceid = x["traceId"]
         kind = x["kind"]
         parent_spanid = x["parentSpanId"]
         this_spanid = x["spanId"]
-        
-        if parent_spanid == "": ## top level span
+
+        if parent_spanid == "":  ## top level span
             if kind == "SPAN_KIND_CLIENT":
                 span_dict[this_spanid]["source"] = x["serviceName"]
-                span_dict[this_spanid]["trace_start_timestamp"] = traces_dict[traceid]["trace_start_timestamp"]
-                span_dict[this_spanid]["trace_end_timestamp"] = traces_dict[traceid]["trace_end_timestamp"]
-                span_dict[this_spanid]["http_status"] = traces_dict[traceid]["http_status"]
-            #assert kind == "SPAN_KIND_SERVER"
+                span_dict[this_spanid]["trace_start_timestamp"] = traces_dict[traceid][
+                    "trace_start_timestamp"
+                ]
+                span_dict[this_spanid]["trace_end_timestamp"] = traces_dict[traceid][
+                    "trace_end_timestamp"
+                ]
+                span_dict[this_spanid]["http_status"] = traces_dict[traceid][
+                    "http_status"
+                ]
+            # assert kind == "SPAN_KIND_SERVER"
             # span_dict[this_spanid]["target"] = x["serviceName"]
             # span_dict[this_spanid]["source"] = "gateway"
             # span_dict[this_spanid]["trace_start_timestamp"] = traces_dict[traceid]["trace_start_timestamp"]
             # span_dict[this_spanid]["trace_end_timestamp"] = traces_dict[traceid]["trace_end_timestamp"]
             # span_dict[this_spanid]["http_status"] = traces_dict[traceid]["http_status"]
-            
+
             # span_dict[this_spanid] = {
             #     "trace_id" :traceid,
             #     "span_id" : this_spanid,
@@ -188,7 +191,7 @@ def parse_results(l, output_filename: str):
             #     "source" : x["serviceName"],
             #     "target" : x["serviceName"]
             # }
-        else: ## child spans
+        else:  ## child spans
             if traceid not in traces_dict:
                 print(f"lost main trace span, id: {traceid}")
                 continue
@@ -198,26 +201,42 @@ def parse_results(l, output_filename: str):
                 span_dict[parent_spanid]["target"] = x["serviceName"]
             elif kind == "SPAN_KIND_CLIENT":
                 span_dict[this_spanid]["source"] = x["serviceName"]
-                span_dict[this_spanid]["trace_start_timestamp"] = traces_dict[traceid]["trace_start_timestamp"]
-                span_dict[this_spanid]["trace_end_timestamp"] = traces_dict[traceid]["trace_end_timestamp"]
-                span_dict[this_spanid]["http_status"] = traces_dict[traceid]["http_status"]
-                
-                
-            
+                span_dict[this_spanid]["trace_start_timestamp"] = traces_dict[traceid][
+                    "trace_start_timestamp"
+                ]
+                span_dict[this_spanid]["trace_end_timestamp"] = traces_dict[traceid][
+                    "trace_end_timestamp"
+                ]
+                span_dict[this_spanid]["http_status"] = traces_dict[traceid][
+                    "http_status"
+                ]
 
     print(f"trace number : {len(traces_dict)}")
     microserviser_pairs = defaultdict(int)
     print(f"http status codes : {http_status_set}")
-    features = ['source', 'target', 'start_timestamp', 'end_timestamp',
-            'trace_id',
-            'latency', 'http_status',
-            'trace_start_timestamp', 'trace_end_timestamp']
+    features = [
+        "source",
+        "target",
+        "start_timestamp",
+        "end_timestamp",
+        "trace_id",
+        "latency",
+        "http_status",
+        "trace_start_timestamp",
+        "trace_end_timestamp",
+    ]
     data = {
-            'source': [], 'target': [], 'start_timestamp': [], 'end_timestamp': [], 'trace_label': [],
-            'trace_id': [],
-            'latency': [], 'http_status': [],
-            'trace_start_timestamp': [], 'trace_end_timestamp': [],
-        }
+        "source": [],
+        "target": [],
+        "start_timestamp": [],
+        "end_timestamp": [],
+        "trace_label": [],
+        "trace_id": [],
+        "latency": [],
+        "http_status": [],
+        "trace_start_timestamp": [],
+        "trace_end_timestamp": [],
+    }
     # for si in span_dict:
     #     span = span_dict[si]
     #     if "trace_id" not in span or span["trace_id"] not in traces_dict or "source" not in span or "target" not in span:
@@ -227,28 +246,37 @@ def parse_results(l, output_filename: str):
     #             data[key].append(span[key])
     #         data["trace_label"].append(0)
     #         microserviser_pairs[span["source"] + "-" + span["target"]] += 1
- 
+
     # df = pd.DataFrame.from_dict(
     #     data, orient='columns',
     # )
     def new_dict(trace_id, http_status):
         h = http_status // 100
-        label = 1 if (h == 4 or h == 5 ) else 0
+        label = 1 if (h == 4 or h == 5) else 0
         raw_features = {
-                's_t': [], 'timestamp': [], 'endtime': [], 'label': label,
-                'trace_id': trace_id,
-                'latency': [], 'http_status': []
-            }
+            "s_t": [],
+            "timestamp": [],
+            "endtime": [],
+            "label": label,
+            "trace_id": trace_id,
+            "latency": [],
+            "http_status": [],
+        }
         return raw_features
 
     df = {}
     svcs = set()
     for si in span_dict:
         span = span_dict[si]
-        if "trace_id" not in span or span["trace_id"] not in traces_dict or "source" not in span or "target" not in span:
+        if (
+            "trace_id" not in span
+            or span["trace_id"] not in traces_dict
+            or "source" not in span
+            or "target" not in span
+        ):
             continue
         else:
-            this_trace_id=span["trace_id"]
+            this_trace_id = span["trace_id"]
             http_status = span["http_status"]
             # http_status = 500
             if this_trace_id not in df:
@@ -258,25 +286,17 @@ def parse_results(l, output_filename: str):
             # if span["target"] == "adservice":
             #     df[this_trace_id]["latency"].append(span["latency"] * 2)
             # else:
-                # df[this_trace_id]["latency"].append(span["latency"])
+            # df[this_trace_id]["latency"].append(span["latency"])
             df[this_trace_id]["latency"].append(span["latency"])
-            
+
             df[this_trace_id]["http_status"].append(span["http_status"])
             df[this_trace_id]["s_t"].append((span["source"], span["target"]))
             svcs.add(span["source"])
             svcs.add(span["target"])
 
-    
     res = [df[d] for d in df]
     df = res
 
     print(f"valid record : {len(df)}")
     write_pkl_file(output_filename, df)
     return df
-        
-
-
-
-
-
-

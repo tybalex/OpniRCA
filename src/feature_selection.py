@@ -1,14 +1,15 @@
-import pickle
+# Standard Library
+import logging
 from collections import defaultdict
 from itertools import product
-from pathlib import Path
 
+# Third Party
 import numpy as np
-import seaborn as sns
-import logging
-from pprint import pprint
-from rca_config import FEATURE_NAMES
 import pandas as pd
+import seaborn as sns
+
+# Local
+from rca_config import FEATURE_NAMES
 
 DEBUG = False  # very slow
 ## python run_selecting_features.py -i dataframe/basic_abort_1011.pkl -o output/basic_abort_1011.feature -h dataframe/uninjection/3.pkl
@@ -16,23 +17,30 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__file__)
 logger.setLevel("DEBUG")
 
+
 def distribution_criteria(empirical, reference, threshold):
     empirical, reference = np.array(empirical), np.array(reference)
     historical_mean, historical_std = np.mean(reference), np.std(reference)
-    ref_ratio = sum(np.abs(reference - historical_mean) > 3 * historical_std) / reference.shape[0]
-    emp_ratio = sum(np.abs(empirical - historical_mean) > 3 * historical_std) / empirical.shape[0]
+    ref_ratio = (
+        sum(np.abs(reference - historical_mean) > 3 * historical_std)
+        / reference.shape[0]
+    )
+    emp_ratio = (
+        sum(np.abs(empirical - historical_mean) > 3 * historical_std)
+        / empirical.shape[0]
+    )
     return (emp_ratio - ref_ratio) > threshold * ref_ratio
 
 
-def fisher_criteria(empirical, reference, side='two-sided'):
-    if side == 'two-sided':
-        diff_mean = (np.abs(np.mean(empirical) - np.mean(reference)) ** 2)
-    elif side == 'less':
+def fisher_criteria(empirical, reference, side="two-sided"):
+    if side == "two-sided":
+        diff_mean = np.abs(np.mean(empirical) - np.mean(reference)) ** 2
+    elif side == "less":
         diff_mean = np.maximum(np.mean(empirical) - np.mean(reference), 0) ** 2
-    elif side == 'greater':
+    elif side == "greater":
         diff_mean = np.maximum(np.mean(reference) - np.mean(empirical), 0) ** 2
     else:
-        raise RuntimeError(f'invalid side: {side}')
+        raise RuntimeError(f"invalid side: {side}")
     variance = np.maximum(np.var(empirical) + np.var(reference), 0.1)
     return diff_mean / variance
 
@@ -46,14 +54,21 @@ def stderr_criteria(empirical, reference, threshold):
     return (emp_ratio - ref_ratio) > threshold * ref_ratio + 1.0
 
 
-def selecting_feature_main(input_data: pd.DataFrame, history_data: pd.DataFrame, fisher_threshold=1):
-    
-    df = input_data.set_index(keys=['source', 'target'], drop=True).sort_index()
-    history = history_data.set_index(keys=['source', 'target'], drop=True).sort_index()
-    indices = np.intersect1d(np.unique(df.index.values), np.unique(history.index.values))
+def selecting_feature_main(
+    input_data: pd.DataFrame,
+    history_data: pd.DataFrame,
+    cluster_id: str,
+    fisher_threshold=1,
+):
+
+    df = input_data.set_index(keys=["source", "target"], drop=True).sort_index()
+    history = history_data.set_index(keys=["source", "target"], drop=True).sort_index()
+    indices = np.intersect1d(
+        np.unique(df.index.values), np.unique(history.index.values)
+    )
     useful_features_dict = defaultdict(list)
     if DEBUG:
-        plot_dir = output_file.parent / 'selecting_feature.debug'
+        plot_dir = output_file.parent / "selecting_feature.debug"
         plot_dir.mkdir(exist_ok=True)
     for (source, target), feature in product(indices, FEATURE_NAMES):
         empirical = np.sort(df.loc[(source, target), feature].values)
@@ -74,21 +89,25 @@ def selecting_feature_main(input_data: pd.DataFrame, history_data: pd.DataFrame,
             useful_features_dict[(source, target)].append(feature)
         try:
             if DEBUG:
+                # Third Party
                 import matplotlib.pyplot as plt
                 from matplotlib.figure import Figure
+
                 fig = Figure(figsize=(4, 3))
                 # x = np.sort(np.concatenate([empirical, reference]))
                 # print('DEBUG:')
                 # print(empirical,reference)
-                sns.distplot(empirical, label='Empirical')
-                sns.distplot(reference, label='Reference')
+                sns.distplot(empirical, label="Empirical")
+                sns.distplot(reference, label="Reference")
                 plt.xlabel(feature)
-                plt.ylabel('PDF')
+                plt.ylabel("PDF")
                 plt.legend()
                 plt.title(f"{source}->{target}, ks={p_value:.2f}, fisher={fisher:.2f}")
                 plt.savefig(
-                    plot_dir / f"{input_file.name.split('.')[0]}_{source}_{target}_{feature}.pdf",
-                    bbox_inches='tight', pad_inches=0
+                    plot_dir
+                    / f"{input_file.name.split('.')[0]}_{source}_{target}_{feature}.pdf",
+                    bbox_inches="tight",
+                    pad_inches=0,
                 )
         except:
             pass
@@ -100,5 +119,5 @@ def selecting_feature_main(input_data: pd.DataFrame, history_data: pd.DataFrame,
     return dict(useful_features_dict)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     selecting_feature_main()
