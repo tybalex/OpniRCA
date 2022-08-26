@@ -32,7 +32,7 @@ spec:
           persistentVolumeClaim:
             claimName: rca-pvc
       containers:
-      - name: yb-rca
+      - name: yb-rca-api
         env:
         - name: DATA_DIR
           value: "/data"
@@ -41,7 +41,7 @@ spec:
         volumeMounts:
           - mountPath: /data
             name: rca-pvc-mount
-        image: docker.io/tybalex/opni-rca:mc
+        image: docker.io/tybalex/opni-rca:mc1
         imagePullPolicy: Always
         ports:
         - containerPort: 5050
@@ -54,7 +54,7 @@ spec:
         volumeMounts:
           - mountPath: /data
             name: rca-pvc-mount
-        image: docker.io/tybalex/opni-rca_trainer:mc
+        image: docker.io/tybalex/opni-rca_trainer:mc1
         imagePullPolicy: Always
 ---
 apiVersion: v1
@@ -62,6 +62,8 @@ kind: Service
 metadata:
   name: yb-rca-service
   namespace: opni-system
+  labels:
+    app: yb-rca
 spec:
   ports:
   - name: http
@@ -70,17 +72,3 @@ spec:
   selector:
     app: yb-rca
   type: ClusterIP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: yb-rca-service-external
-  namespace: opni-system
-spec:
-  ports:
-  - name: http
-    port: 5050
-    targetPort: 5050
-  selector:
-    app: yb-rca
-  type: LoadBalancer
